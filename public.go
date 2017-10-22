@@ -6,24 +6,27 @@ import (
 	"net/url"
 	"time"
 
+	"log"
+
 	"github.com/franela/goreq"
+	"github.com/hhh0pE/ggm"
 	"github.com/k0kubun/pp"
 )
 
 type (
 	Ticker      map[string]TickerEntry
 	TickerEntry struct {
-		Last        float64 `json:",string"`
-		Ask         float64 `json:"lowestAsk,string"`
-		Bid         float64 `json:"highestBid,string"`
-		Change      float64 `json:"percentChange,string"`
-		BaseVolume  float64 `json:"baseVolume,string"`
-		QuoteVolume float64 `json:"quoteVolume,string"`
-		IsFrozen    int64   `json:"isFrozen,string"`
+		Last        ggm.Decimal `json:",string"`
+		Ask         ggm.Decimal `json:"lowestAsk,string"`
+		Bid         ggm.Decimal `json:"highestBid,string"`
+		Change      ggm.Decimal `json:"percentChange,string"`
+		BaseVolume  ggm.Decimal `json:"baseVolume,string"`
+		QuoteVolume ggm.Decimal `json:"quoteVolume,string"`
+		IsFrozen    int64       `json:"isFrozen,string"`
 	}
 
 	DailyVolume          map[string]DailyVolumeEntry
-	DailyVolumeEntry     map[string]float64
+	DailyVolumeEntry     map[string]ggm.Decimal
 	DailyVolumeTemp      map[string]interface{}
 	DailyVolumeEntryTemp map[string]interface{}
 
@@ -33,8 +36,8 @@ type (
 		IsFrozen bool
 	}
 	Order struct {
-		Rate   float64
-		Amount float64
+		Rate   ggm.Decimal
+		Amount ggm.Decimal
 	}
 
 	OrderBookTemp struct {
@@ -51,28 +54,28 @@ type (
 		ID     int64 `json:"globalTradeID"`
 		Date   string
 		Type   string
-		Rate   float64 `json:",string"`
-		Amount float64 `json:",string"`
-		Total  float64 `json:",string"`
+		Rate   ggm.Decimal `json:",string"`
+		Amount ggm.Decimal `json:",string"`
+		Total  ggm.Decimal `json:",string"`
 	}
 
 	ChartData      []ChartDataEntry
 	ChartDataEntry struct {
 		Date            int64
-		High            float64
-		Low             float64
-		Open            float64
-		Close           float64
-		Volume          float64
-		QuoteVolume     float64
-		WeightedAverage float64
+		High            ggm.Decimal
+		Low             ggm.Decimal
+		Open            ggm.Decimal
+		Close           ggm.Decimal
+		Volume          ggm.Decimal
+		QuoteVolume     ggm.Decimal
+		WeightedAverage ggm.Decimal
 	}
 
 	Currencies map[string]Currency
 	Currency   struct {
 		Name           string
-		TxFee          float64 `json:",string"`
-		MinConf        float64
+		TxFee          ggm.Decimal `json:",string"`
+		MinConf        ggm.Decimal
 		DepositAddress string
 		Disabled       int64
 		Delisted       int64
@@ -84,10 +87,10 @@ type (
 		Demands []LoanOrder
 	}
 	LoanOrder struct {
-		Rate     float64 `json:",string"`
-		Amount   float64 `json:",string"`
-		RangeMin float64
-		RangeMax float64
+		Rate     ggm.Decimal `json:",string"`
+		Amount   ggm.Decimal `json:",string"`
+		RangeMin ggm.Decimal
+		RangeMax ggm.Decimal
 	}
 )
 
@@ -110,7 +113,12 @@ func (p *Poloniex) DailyVolume() (dailyVolume DailyVolume, err error) {
 		default:
 			v := i.(map[string]interface{})
 			for kk, vv := range v {
-				dve[kk] = f(vv)
+				if parsed, err := ggm.ParseDecimal(vv); err != nil {
+					log.Println("Error when parsing \"", vv, "\": "+err.Error())
+					dve[kk] = parsed
+				} else {
+					dve[kk] = parsed
+				}
 			}
 			dailyVolume[k] = dve
 		case string:
@@ -215,35 +223,54 @@ func tempToOrderBook(obt OrderBookTemp) (ob OrderBook) {
 	ob.Bids = []Order{}
 	for k := range asks {
 		v := asks[k]
-		price := f(v[0])
-		amount := f(v[1])
-		o := Order{Rate: price, Amount: amount}
+		var o Order
+		if parsed, err := ggm.ParseDecimal(v[0]); err != nil {
+			log.Println("tempToOrderBook error when parsing ask's Rate: " + err.Error())
+		} else {
+			o.Rate = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(v[1]); err != nil {
+			log.Println("tempToOrderBook error when parsing ask's Amount: " + err.Error())
+		} else {
+			o.Amount = parsed
+		}
 		ob.Asks = append(ob.Asks, o)
 	}
 	for k := range bids {
 		v := bids[k]
-		price := f(v[0])
-		amount := f(v[1])
-		o := Order{Rate: price, Amount: amount}
+		var o Order
+
+		if parsed, err := ggm.ParseDecimal(v[0]); err != nil {
+			log.Println("tempToOrderBook error when parsing bid's Rate: " + err.Error())
+		} else {
+			o.Rate = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(v[1]); err != nil {
+			log.Println("tempToOrderBook error when parsing bid's Amount: " + err.Error())
+		} else {
+			o.Amount = parsed
+		}
 		ob.Bids = append(ob.Bids, o)
 	}
 	return
 }
 
-func floatCmp(a, b interface{}) int {
-	fa := f(a)
-	fb := f(b)
-	if fa < fb {
-		return -1
-	} else if fa > fb {
-		return 1
-	}
-	return 0
-}
-
-func reverseFloatCmp(a, b interface{}) int {
-	return floatCmp(a, b) * -1
-}
+//func floatCmp(a, b interface{}) int {
+//	fa := f(a)
+//	fb := f(b)
+//	if fa < fb {
+//		return -1
+//	} else if fa > fb {
+//		return 1
+//	}
+//	return 0
+//}
+//
+//func reverseFloatCmp(a, b interface{}) int {
+//	return floatCmp(a, b) * -1
+//}
 
 func (p *Poloniex) public(command string, params url.Values, retval interface{}) (err error) {
 	if p.debug {

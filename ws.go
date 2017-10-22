@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/hhh0pE/ggm"
 	"github.com/k0kubun/pp"
 	"gopkg.in/beatgammit/turnpike.v2"
 )
@@ -13,15 +14,15 @@ type (
 	//WSTicker describes a ticker item
 	WSTicker struct {
 		Pair          string
-		Last          float64
-		Ask           float64
-		Bid           float64
-		PercentChange float64
-		BaseVolume    float64
-		QuoteVolume   float64
+		Last          ggm.Decimal
+		Ask           ggm.Decimal
+		Bid           ggm.Decimal
+		PercentChange ggm.Decimal
+		BaseVolume    ggm.Decimal
+		QuoteVolume   ggm.Decimal
 		IsFrozen      bool
-		DailyHigh     float64
-		DailyLow      float64
+		DailyHigh     ggm.Decimal
+		DailyLow      ggm.Decimal
 	}
 
 	// WSTickerChan is a onduit through which WSTicker items are sent
@@ -30,8 +31,8 @@ type (
 	//WSTrade describes a trade, a new order, or an order update
 	WSTrade struct {
 		TradeID string
-		Rate    float64 `json:",string"`
-		Amount  float64 `json:",string"`
+		Rate    ggm.Decimal `json:",string"`
+		Amount  ggm.Decimal `json:",string"`
 		Type    string
 		Date    string
 		TS      time.Time
@@ -99,18 +100,75 @@ func (p *Poloniex) Unsubscribe(code string) {
 //makeTickerHandler takes a WS Order or Trade and send it over the channel sepcified by the user
 func (p *Poloniex) makeTickerHandler(ch chan WSTicker) turnpike.EventHandler {
 	return func(p []interface{}, n map[string]interface{}) {
-		t := WSTicker{
-			Pair:          p[0].(string),
-			Last:          f(p[1]),
-			Ask:           f(p[2]),
-			Bid:           f(p[3]),
-			PercentChange: f(p[4]) * 100.0,
-			BaseVolume:    f(p[5]),
-			QuoteVolume:   f(p[6]),
-			IsFrozen:      p[7].(float64) != 0.0,
-			DailyHigh:     f(p[8]),
-			DailyLow:      f(p[9]),
+		var t WSTicker
+
+		t.Pair = p[0].(string)
+		if parsed, err := ggm.ParseDecimal(p[1]); err != nil {
+			log.Println("ws ticker parse Last error: " + err.Error())
+		} else {
+			t.Last = parsed
 		}
+
+		if parsed, err := ggm.ParseDecimal(p[2]); err != nil {
+			log.Println("ws ticker parse Ask error: " + err.Error())
+		} else {
+			t.Ask = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[3]); err != nil {
+			log.Println("ws ticker parse Bid error: " + err.Error())
+		} else {
+			t.Bid = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[4]); err != nil {
+			log.Println("ws ticker parse PercentChange error: " + err.Error())
+		} else {
+			t.Last = parsed.MultiplyFloat(100)
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[5]); err != nil {
+			log.Println("ws ticker parse BaseVolume error: " + err.Error())
+		} else {
+			t.BaseVolume = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[6]); err != nil {
+			log.Println("ws ticker parse Quote Volume error: " + err.Error())
+		} else {
+			t.QuoteVolume = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[7]); err != nil {
+			log.Println("ws ticker parse IsFrozen error: " + err.Error())
+		} else {
+			t.IsFrozen = !parsed.EqualFloat(0.0)
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[8]); err != nil {
+			log.Println("ws ticker parse Daily High error: " + err.Error())
+		} else {
+			t.DailyHigh = parsed
+		}
+
+		if parsed, err := ggm.ParseDecimal(p[9]); err != nil {
+			log.Println("ws ticker parse Daily Low error: " + err.Error())
+		} else {
+			t.DailyLow = parsed
+		}
+
+		//t := WSTicker{
+		//	Pair:          p[0].(string),
+		//	Last:          f(p[1]),
+		//	Ask:           f(p[2]),
+		//	Bid:           f(p[3]),
+		//	PercentChange: f(p[4]) * 100.0,
+		//	BaseVolume:    f(p[5]),
+		//	QuoteVolume:   f(p[6]),
+		//	IsFrozen:      p[7].(float64) != 0.0,
+		//	DailyHigh:     f(p[8]),
+		//	DailyLow:      f(p[9]),
+		//}
 		ch <- t
 	}
 }
